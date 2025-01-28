@@ -12,7 +12,7 @@ use embassy_stm32::time::Hertz;
 //use embassy_stm32::rcc::low_level::RccPeripheral;
 //use embassy_stm32::timer::low_level::GeneralPurpose16bitInstance;
 use embassy_stm32::Config;
-use embassy_stm32::adc::{self, Adc, SampleTime};
+use embassy_stm32::adc::{self, Adc, AdcChannel, AnyAdcChannel, SampleTime};
 use embassy_stm32::gpio::{Output, Pull, Level, Speed};
 use embassy_stm32::interrupt;
 //use embassy_stm32::timer::pwm_input::PwmInput;
@@ -24,7 +24,7 @@ use {defmt_rtt as _, panic_probe as _};
 
 // Declare async tasks
 #[embassy_executor::task]
-async fn adc_task(mut adc: adc::Adc<'static, ADC1>, mut adc_pin: embassy_stm32::peripherals::PA1) {
+async fn adc_task(mut adc: adc::Adc<'static, ADC1>, mut adc_pin: AnyAdcChannel<ADC1>) {
     
     adc.set_sample_time(SampleTime::CYCLES47_5);
 
@@ -154,7 +154,7 @@ async fn main(spawner: Spawner) {
     let adc = Adc::new(p.ADC1);
 
     // Spawned tasks run in the background, concurrently.
-    spawner.spawn(adc_task(adc, p.PA1)).unwrap();
+    spawner.spawn(adc_task(adc, p.PA1.degrade_adc())).unwrap();
     spawner.spawn(button_task(button)).unwrap();
 
     //let mut pwm_input = PwmInput::new(p.TIM2, p.PA0, Pull::None, khz(10));
