@@ -15,6 +15,8 @@ use embassy_stm32::Config;
 use embassy_stm32::adc::{self, Adc, AdcChannel, AnyAdcChannel, SampleTime};
 use embassy_stm32::gpio::{Output, Pull, Level, Speed};
 use embassy_stm32::interrupt;
+use embassy_stm32::bind_interrupts;
+use embassy_stm32::usart::{self, Uart};
 //use embassy_stm32::timer::pwm_input::PwmInput;
 //use embassy_stm32::time::hz;
 //use embassy_stm32::timer::CountingMode;
@@ -48,9 +50,28 @@ async fn button_task(mut button: ExtiInput<'static>) {
     }
 }
 
+// Declare async tasks
+#[embassy_executor::task]
+async fn uart_task(mut lpuart: Uart<'static, embassy_stm32::mode::Async>) {
+    info!("UART started, type something...");
+    lpuart.write("UART started, type something...".as_bytes()).await.unwrap();
+
+    let mut buffer = [0u8; 1];
+
+    // Loop to read from UART and echo back
+    loop {
+        lpuart.read(&mut buffer).await.unwrap();
+        lpuart.write(&buffer).await.unwrap();
+    }
+}
+
 //bind_interrupts!(struct Irqs {
 //    TIM2 => timer::CaptureCompareInterruptHandler<peripherals::TIM2>;
 //});
+
+bind_interrupts!(struct Irqs {
+    LPUART1 => embassy_stm32::usart::InterruptHandler<embassy_stm32::peripherals::LPUART1>;
+});
 
 //#[link_section = ".ram2bss"]
 #[link_section = ".ccmram"]
@@ -156,6 +177,11 @@ async fn main(spawner: Spawner) {
     // Spawned tasks run in the background, concurrently.
     spawner.spawn(adc_task(adc, p.PA1.degrade_adc())).unwrap();
     spawner.spawn(button_task(button)).unwrap();
+
+    let mut config = usart::Config::default();
+    config.baudrate = 115_200;
+    let lpusart = Uart::new(p.LPUART1, p.PA3, p.PA2, Irqs, p.DMA1_CH1, p.DMA1_CH2, config).unwrap();
+    spawner.spawn(uart_task(lpusart)).unwrap();
 
     //let mut pwm_input = PwmInput::new(p.TIM2, p.PA0, Pull::None, khz(10));
     //pwm_input.enable();
