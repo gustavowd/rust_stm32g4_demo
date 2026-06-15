@@ -129,10 +129,10 @@ bind_interrupts!(struct Irqs {
 
 //#[link_section = ".ram2bss"]
 #[link_section = ".ccmram"]
-static mut TESTE: i32 = 60;
+static TESTE: i32 = 60;
 
 #[link_section = ".data2"]
-static mut TESTE2: i32 = 70;
+static TESTE2: i32 = 70;
 
 const ADDRESS: u8 = 0x53;
 const WHOAMI: u8 = 0;
@@ -220,10 +220,10 @@ async fn main(spawner: Spawner) {
     let mut p: embassy_stm32::Peripherals = embassy_stm32::init(config);
 
     info!("Hello World!");
-    unsafe {
+    //unsafe {
         println!("Teste de variável na memória CCMRAM {}", TESTE);
         println!("Teste de variável na memória SRAM2 {}", TESTE2);
-    }
+    //}
     //defmt::println!("Hello, world!");
 
     //let button = ExtiInput::new(p.PC13, p.EXTI13, Pull::Down);
