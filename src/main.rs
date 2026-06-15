@@ -15,7 +15,7 @@ use embassy_stm32::{bind_interrupts, interrupt, peripherals};
 use embassy_stm32::usart::{self, Uart};
 use embassy_stm32::i2c::{self, I2c};
 //use adxl345_eh_driver::{Driver, address, GRange, OutputDataRate};
-use adxl345_async::{Adxl345Async, Address, Range, DataRate};
+use adxl345_async::{Adxl345Async, Address, Range, DataRate, I2cBus};
 use embassy_stm32::exti::{self, ExtiInput};
 use embassy_time::Timer;
 use embassy_stm32::time::khz;
@@ -98,12 +98,11 @@ async fn pwm_task(mut pwm: SimplePwm<'static, embassy_stm32::peripherals::TIM1>)
 
 // Declare async tasks
 #[embassy_executor::task]
-async fn accel_task(mut accel: Adxl345Async<I2c<'static, embassy_stm32::mode::Async, i2c::mode::Master>>) {
-//pub async fn i2c_slave_task(mut i2c_slave: I2c<'static, embassy_stm32::mode::Async, i2c::mode::MultiMaster>) {
+async fn accel_task(mut accel: Adxl345Async<I2cBus<I2c<'static, embassy_stm32::mode::Async, embassy_stm32::i2c::mode::Master>>>) {
     let _ = accel.set_range(Range::G2).await;
     let _ = accel.set_data_rate(DataRate::Rate100Hz).await;
     loop {
-        if let Ok((x, y, z)) = accel.read_accel().await{
+        if let Ok((x, y, z)) = accel.get_accel().await{
             info!("ADXL345 Accel Raw: x={}, y={}, z={}", x, y, z);
         }
         Timer::after_millis(1000).await;
@@ -304,8 +303,10 @@ async fn main(spawner: Spawner) {
     }
     //i2c_cs.set_low();
 
-    let mut accel = Adxl345Async::new(i2c, Some(Address::SECONDARY));
-    match accel.read_accel().await {
+    let bus = I2cBus::new(i2c, Some(Address::SECONDARY));
+    let mut accel = Adxl345Async::new(bus);
+    let _ = accel.setup().await;
+    match accel.get_accel_raw().await {
         Ok((x, y, z)) => {
             info!("ADXL345 Accel Raw: x={}, y={}, z={}", x, y, z);
         },
