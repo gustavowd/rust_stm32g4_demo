@@ -30,7 +30,8 @@ defmt = "1.0.1"
 defmt-rtt = "1.0.0"
 cortex-m-semihosting = "0.5.0"
 #adxl345-eh-driver = "0.2.2"
-adxl345-async = "0.2.0"
+adxl345-async = "0.2.1"
+#adxl345-async = {version = "0.2.1", path = "../adxl345-async"}
 
 [profile.release]
 debug = 2
