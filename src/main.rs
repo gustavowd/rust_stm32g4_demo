@@ -14,10 +14,14 @@ use embassy_stm32::Config;
 use embassy_stm32::exti::{self, ExtiInput};
 use embassy_stm32::gpio::{Level, Output, OutputType, Pull, Speed};
 use embassy_stm32::i2c::{self, I2c};
+use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::{Hertz, khz};
 use embassy_stm32::timer::simple_pwm::{PwmPin, SimplePwm};
 use embassy_stm32::usart::{self, Uart};
 use embassy_time::Timer;
+use embedded_hal_bus::spi::{ExclusiveDevice};
+use embedded_sdmmc::{VolumeManager, TimeSource, Timestamp};
+
 
 mod tasks;
 
@@ -73,7 +77,25 @@ bind_interrupts!(struct Irqs {
 
     EXTI15_10 => exti::InterruptHandler<interrupt::typelevel::EXTI15_10>;
     //TIM2 => timer::CaptureCompareInterruptHandler<peripherals::TIM2>;
+
+    DMA1_CHANNEL5 => embassy_stm32::dma::InterruptHandler<peripherals::DMA1_CH5>;
+    DMA1_CHANNEL6 => embassy_stm32::dma::InterruptHandler<peripherals::DMA1_CH6>;
 });
+
+struct DummyTimeSource;
+
+impl TimeSource for DummyTimeSource {
+    fn get_timestamp(&self) -> Timestamp {
+        Timestamp {
+            year_since_1970: 56,     // 1970 + 56 = 2026
+            zero_indexed_month: 5,   // Junho (0 a 11)
+            zero_indexed_day: 17,    // Dia 18 (0 a 30)
+            hours: 13,
+            minutes: 45,
+            seconds: 0,
+        }
+    }
+}
 
 
 #[embassy_executor::main]
@@ -120,15 +142,15 @@ async fn main(spawner: Spawner) {
     let mut adc_temp = Adc::new(p.ADC1, Default::default());
     let mut temperature = adc_temp.enable_temperature();
 
-    let measured = adc.blocking_read(&mut p.PA7, SampleTime::CYCLES247_5); // Note a mudança no ciclo também!
+    let measured = adc.blocking_read(&mut p.PA4, SampleTime::CYCLES247_5); // Note a mudança no ciclo também!
     info!("measured: {}", measured);
 
     // (Certifique-se de que o objeto do sensor de temperatura interna do chip se chama p.ADC_TEMP ou similar no G4)
     let temp = adc_temp.blocking_read(&mut temperature, SampleTime::CYCLES247_5);
     info!("measured: {}", temp);
 
-    // 1. Cria o canal genérico a partir do pino PA7 configurando o SampleTime
-    let adc_channel = p.PA7.degrade_adc();
+    // 1. Cria o canal genérico a partir do pino PA4 configurando o SampleTime
+    let adc_channel = p.PA4.degrade_adc();
 
     // Spawned tasks run in the background, concurrently.
     spawner.spawn(unwrap!(tasks::adc::adc_task(adc, adc_channel)));
@@ -196,6 +218,32 @@ async fn main(spawner: Spawner) {
     }
 
     spawner.spawn(unwrap!(tasks::accel::accel_task(accel)));
+
+    //  Configurar o SPI (Ajuste os pinos para o G474)
+    let mut spi_config = SpiConfig::default();
+    spi_config.frequency = Hertz(400_000); // Começa lento para inicialização do SD
+    let spi = Spi::new(p.SPI1, p.PB3, p.PA7, p.PA6, p.DMA1_CH5, p.DMA1_CH6, Irqs, spi_config);
+
+    // Configurar o Chip Select (CS) manual
+    let cs = Output::new(p.PB6, Level::High, Speed::VeryHigh);
+
+    let delay = embassy_time::Delay;
+
+    let spi_device;
+    let sdcard;
+    match ExclusiveDevice::new(spi, cs, embassy_time::Delay){
+        Ok(device) => {
+            spi_device = device;
+            sdcard = embedded_sdmmc::SdCard::new(spi_device, delay);
+            // Get the card size (this also triggers card initialisation because it's not been done yet)
+            info!("Card size is {} bytes", sdcard.num_bytes().unwrap());
+            let volume_mgr = VolumeManager::new(sdcard, DummyTimeSource);
+            spawner.spawn(unwrap!(tasks::sdcard::sd_task(volume_mgr)));
+        },
+        Err(e) => {
+            error!("Failed to create SPI device: {:?}", e);
+        }
+    }
 
 
     let mut led = Output::new(p.PA5, Level::High, Speed::Low);

@@ -1,3 +1,6 @@
+/* Define o tamanho da pilha diretamente no script de linkagem */
+__stack_size = 16*1024;
+
 MEMORY
 {
     FLASH    : ORIGIN = 0x08000000, LENGTH =  512K /* BANK_1 */
