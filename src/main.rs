@@ -19,12 +19,7 @@ use embassy_stm32::timer::simple_pwm::{PwmPin, SimplePwm};
 use embassy_stm32::usart::{self, Uart};
 use embassy_time::Timer;
 
-mod uart;
-mod adc;
-mod button;
-mod pwm;
-mod accel;
-
+mod tasks;
 
 #[link_section = ".ccmram"]
 static TESTE: i32 = 60;
@@ -136,21 +131,21 @@ async fn main(spawner: Spawner) {
     let adc_channel = p.PA7.degrade_adc();
 
     // Spawned tasks run in the background, concurrently.
-    spawner.spawn(unwrap!(adc::adc_task(adc, adc_channel)));
+    spawner.spawn(unwrap!(tasks::adc::adc_task(adc, adc_channel)));
 
-    spawner.spawn(unwrap!(button::button_task(button)));
+    spawner.spawn(unwrap!(tasks::button::button_task(button)));
 
     let mut config = usart::Config::default();
     config.baudrate = 115_200;
     let lpusart = Uart::new(p.LPUART1, p.PA3, p.PA2,p.DMA1_CH1, p.DMA1_CH2, Irqs, config).unwrap();
-    spawner.spawn(unwrap!(uart::uart_task(lpusart)));
+    spawner.spawn(unwrap!(tasks::uart::uart_task(lpusart)));
 
     let ch1_pin = PwmPin::new(p.PC0, OutputType::PushPull);
     let pwm = SimplePwm::new(p.TIM1, Some(ch1_pin), None, None, None, khz(10), Default::default());
     //let mut ch1: embassy_stm32::timer::simple_pwm::SimplePwmChannel<'_, embassy_stm32::peripherals::TIM1> = pwm.ch1();
     //ch1.enable();
 
-    spawner.spawn(unwrap!(pwm::pwm_task(pwm)));
+    spawner.spawn(unwrap!(tasks::pwm::pwm_task(pwm)));
 
     //let mut i2c = I2c::new_blocking(p.I2C1, p.PB8, p.PB9, Hertz(100_000), i2c::Config::default());
     //println!("{:?}", p.PB8.af_num());
@@ -200,7 +195,7 @@ async fn main(spawner: Spawner) {
         Err(e) => error!("Error reading accel: {:?}", e),
     }
 
-    spawner.spawn(unwrap!(accel::accel_task(accel)));
+    spawner.spawn(unwrap!(tasks::accel::accel_task(accel)));
 
 
     let mut led = Output::new(p.PA5, Level::High, Speed::Low);
