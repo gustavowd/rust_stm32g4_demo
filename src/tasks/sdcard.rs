@@ -22,9 +22,7 @@ pub type MyVolumeManager = embedded_sdmmc::VolumeManager<
 >;
 
 #[embassy_executor::task]
-pub async fn sd_task(
-    volume_mgr: MyVolumeManager) {
-
+pub async fn sd_task(volume_mgr: MyVolumeManager) {
     let volume0;
     match volume_mgr.open_volume(VolumeIdx(0)) {
         Ok(vol) => {
@@ -49,27 +47,41 @@ pub async fn sd_task(
     }
 };
     // Open a file called "MY_FILE.TXT" in the root directory
-    // This mutably borrows the directory.
     let my_file = match root_dir.open_file_in_dir("TESTE.TXT", Mode::ReadOnly) {
-    Ok(file) => {
-        defmt::info!("Arquivo aberto com sucesso!");
-        file // Retorna o arquivo para a variável my_file
-    },
-    Err(_e) => {
-        defmt::error!("Erro ao abrir o arquivo.");
-        return; // Sai da task se o arquivo não existir ou falhar
-    }
-};
-    // Print the contents of the file, assuming it's in ISO-8859-1 encoding
+        Ok(file) => {
+            defmt::info!("Arquivo aberto com sucesso!");
+            file // Retorna o arquivo para a variável my_file
+        },
+        Err(_e) => {
+            defmt::error!("Erro ao abrir o arquivo.");
+            return; // Sai da task se o arquivo não existir ou falhar
+        }
+    };
+    // Print the contents of the file
     while !my_file.is_eof() {
         let mut buffer = [0u8; 512];
         
         // Tentamos ler o arquivo. Se der certo, 'num_read' recebe a quantidade de bytes lidos
         if let Ok(num_read) = my_file.read(&mut buffer) {
             // Se leu mais de 0 bytes, processa o buffer
+            if num_read > 0 {
+                // Converte o pedaço lido do buffer em uma String do Rust (&str) de forma segura.
+                // O core::str::from_utf8 garante que os bytes são caracteres válidos (UTF-8).
+                match core::str::from_utf8(&buffer[0..num_read]) {
+                    Ok(texto) => {
+                        // Imprime o bloco inteiro de texto de uma única vez!
+                        info!("{}", texto);
+                    }
+                    Err(_) => {
+                        defmt::warn!("O bloco lido contém caracteres UTF-8 inválidos.");
+                    }
+                }
+            }
+            /*
             for b in &buffer[0..num_read] {
                 info!("{}", *b as char);
             }
+            */
         } else {
             // Se caiu aqui, houve um erro físico ou lógica na leitura do cartão
             defmt::error!("Falha crítica ao ler os dados do arquivo no cartão SD.");
@@ -77,8 +89,23 @@ pub async fn sd_task(
         }
     }
     loop {
-        embassy_time::Timer::after_secs(5).await;
+        embassy_time::Timer::after_secs(10).await;
 
-        defmt::info!("Task acessando o SD diretamente (sem Mutex)...");
+        info!("Task acessando o SD diretamente (sem Mutex)...");
+        let my_other_file = match root_dir.open_file_in_dir("MY_DATA.CSV", Mode::ReadWriteCreateOrAppend) {
+            Ok(file) => file,
+            Err(_) => {
+                info!("Erro ao abrir o arquivo MY_DATA.CSV.");
+                return;
+            }
+        };
+        let _ = my_other_file.write(b"Timestamp,Signal,Value\n");
+        let _ = my_other_file.write(b"2025-01-01T00:00:00Z,TEMP,25.0\n");
+        let _ = my_other_file.write(b"2025-01-01T00:00:01Z,TEMP,25.1\n");
+        let _ = my_other_file.write(b"2025-01-01T00:00:02Z,TEMP,25.2\n");
+
+        // Don't forget to flush the file so that the directory entry is updated
+        let _ = my_other_file.flush();
+        let _ = my_other_file.close();
     }
 }
