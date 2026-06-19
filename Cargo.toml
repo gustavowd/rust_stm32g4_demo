@@ -23,7 +23,7 @@ static_cell = "2.1.1"
 embedded-hal = "1.0.0"
 embassy-stm32 = {version = "0.6.0", features = [ "defmt", "time-driver-any", "stm32g474re", "single-bank", "memory-x", "unstable-pac", "exti", "time"] }
 embassy-sync = {version = "0.8.0", features = ["defmt"]}
-embassy-executor = {version = "0.10.0", features = ["platform-cortex-m", "executor-thread", "defmt"]}
+embassy-executor = {version = "0.10.0", features = ["platform-cortex-m", "executor-thread", "executor-interrupt","defmt"]}
 embassy-time = {version = "0.5.0", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"]}
 embassy-futures = "0.1.1"
 defmt = "1.0.1"

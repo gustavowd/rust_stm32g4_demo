@@ -47,7 +47,7 @@ pub async fn sd_task(volume_mgr: MyVolumeManager) {
     }
 };
     // Open a file called "MY_FILE.TXT" in the root directory
-    let my_file = match root_dir.open_file_in_dir("TESTE.TXT", Mode::ReadOnly) {
+    let my_file = match root_dir.open_file_in_dir("test.txt", Mode::ReadOnly) {
         Ok(file) => {
             defmt::info!("Arquivo aberto com sucesso!");
             file // Retorna o arquivo para a variável my_file
@@ -99,10 +99,22 @@ pub async fn sd_task(volume_mgr: MyVolumeManager) {
                 return;
             }
         };
-        let _ = my_other_file.write(b"Timestamp,Signal,Value\n");
-        let _ = my_other_file.write(b"2025-01-01T00:00:00Z,TEMP,25.0\n");
-        let _ = my_other_file.write(b"2025-01-01T00:00:01Z,TEMP,25.1\n");
-        let _ = my_other_file.write(b"2025-01-01T00:00:02Z,TEMP,25.2\n");
+        match my_other_file.write(b"Timestamp,Signal,Value\n") {
+            Ok(_) => info!("Cabeçalho escrito com sucesso!"),
+            Err(_) => info!("Erro ao escrever o cabeçalho no arquivo."),
+        }
+        match my_other_file.write(b"2025-01-01T00:00:00Z,TEMP,25.0\n") {
+            Ok(_) => info!("Dados escritos com sucesso!"),
+            Err(_) => info!("Erro ao escrever dados no arquivo."),
+        }
+        match my_other_file.write(b"2025-01-01T00:00:01Z,TEMP,25.1\n") {
+            Ok(_) => info!("Dados escritos com sucesso!"),
+            Err(_) => info!("Erro ao escrever dados no arquivo."),
+        }
+        match my_other_file.write(b"2025-01-01T00:00:02Z,TEMP,25.2\n") {
+            Ok(_) => info!("Dados escritos com sucesso!"),
+            Err(_) => info!("Erro ao escrever dados no arquivo."),
+        }
 
         // Don't forget to flush the file so that the directory entry is updated
         let _ = my_other_file.flush();

@@ -7,7 +7,7 @@ use cortex_m_rt::pre_init;
 use adxl345_async::{Adxl345Async, Address, I2cBus};
 use defmt::*;
 use {defmt_rtt as _, panic_probe as _};
-use embassy_executor::Spawner;
+use embassy_executor::{Spawner, InterruptExecutor};
 use embassy_stm32::{bind_interrupts, interrupt, peripherals};
 use embassy_stm32::adc::{Adc, AdcChannel, SampleTime};
 use embassy_stm32::Config;
@@ -65,6 +65,17 @@ unsafe fn before_main() {
     }
 }
 
+static INT_EXECUTOR: InterruptExecutor = InterruptExecutor::new();
+
+// 2. Na exceção PendSV, nós chamamos o 'run' do executor.
+// Como ele roda dentro da interrupção, ele herda a prioridade dela automaticamente!
+#[interrupt]
+unsafe fn EXTI0() {
+    unsafe {
+        // O método 'poll' ou 'run' faz o executor processar as tasks da fila dele
+        INT_EXECUTOR.on_interrupt();
+    }
+}
 bind_interrupts!(struct Irqs {
     LPUART1 => embassy_stm32::usart::InterruptHandler<peripherals::LPUART1>;
     DMA1_CHANNEL1 => embassy_stm32::dma::InterruptHandler<peripherals::DMA1_CH1>;
@@ -135,6 +146,10 @@ async fn main(spawner: Spawner) {
         println!("Teste de variável na memória SRAM2 {}", TESTE2);
     //}
 
+    // --- INICIALIZAÇÃO DO EXECUTOR ---
+    // O start() vincula o executor ao token da interrupção e limpa o estado inicial
+    let int_spawner = INT_EXECUTOR.start(embassy_stm32::interrupt::EXTI0);
+
     let button = ExtiInput::new(p.PC13, p.EXTI13, Pull::Down, Irqs);
 
     let mut adc = Adc::new(p.ADC2, Default::default());
@@ -153,21 +168,21 @@ async fn main(spawner: Spawner) {
     let adc_channel = p.PA4.degrade_adc();
 
     // Spawned tasks run in the background, concurrently.
-    spawner.spawn(unwrap!(tasks::adc::adc_task(adc, adc_channel)));
+    int_spawner.spawn(unwrap!(tasks::adc::adc_task(adc, adc_channel)));
 
-    spawner.spawn(unwrap!(tasks::button::button_task(button)));
+    int_spawner.spawn(unwrap!(tasks::button::button_task(button)));
 
     let mut config = usart::Config::default();
     config.baudrate = 115_200;
     let lpusart = Uart::new(p.LPUART1, p.PA3, p.PA2,p.DMA1_CH1, p.DMA1_CH2, Irqs, config).unwrap();
-    spawner.spawn(unwrap!(tasks::uart::uart_task(lpusart)));
+    int_spawner.spawn(unwrap!(tasks::uart::uart_task(lpusart)));
 
     let ch1_pin = PwmPin::new(p.PC0, OutputType::PushPull);
     let pwm = SimplePwm::new(p.TIM1, Some(ch1_pin), None, None, None, khz(10), Default::default());
     //let mut ch1: embassy_stm32::timer::simple_pwm::SimplePwmChannel<'_, embassy_stm32::peripherals::TIM1> = pwm.ch1();
     //ch1.enable();
 
-    spawner.spawn(unwrap!(tasks::pwm::pwm_task(pwm)));
+    int_spawner.spawn(unwrap!(tasks::pwm::pwm_task(pwm)));
 
     //let mut i2c = I2c::new_blocking(p.I2C1, p.PB8, p.PB9, Hertz(100_000), i2c::Config::default());
     //println!("{:?}", p.PB8.af_num());
@@ -217,7 +232,7 @@ async fn main(spawner: Spawner) {
         Err(e) => error!("Error reading accel: {:?}", e),
     }
 
-    spawner.spawn(unwrap!(tasks::accel::accel_task(accel)));
+    int_spawner.spawn(unwrap!(tasks::accel::accel_task(accel)));
 
     //  Configurar o SPI (Ajuste os pinos para o G474)
     let mut spi_config = SpiConfig::default();
