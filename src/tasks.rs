@@ -1,6 +1,7 @@
-pub mod uart;
+pub mod accel;
 pub mod adc;
 pub mod button;
+pub mod led;
 pub mod pwm;
-pub mod accel;
 pub mod sdcard;
+pub mod uart;

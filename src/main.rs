@@ -261,16 +261,11 @@ async fn main(spawner: Spawner) {
     }
 
 
-    let mut led = Output::new(p.PA5, Level::High, Speed::Low);
+    let led = Output::new(p.PA5, Level::High, Speed::Low);
+    int_spawner.spawn(unwrap!(tasks::led::adc_task(led)));
 
     loop {
-        //info!("high");
-        led.set_high();
-        Timer::after_millis(500).await;
-
-        //info!("low");
-        led.set_low();
-        Timer::after_millis(500).await;
+        Timer::after_millis(1000).await;
     }
 }
 
