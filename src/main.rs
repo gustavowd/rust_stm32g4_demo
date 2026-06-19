@@ -252,6 +252,17 @@ async fn main(spawner: Spawner) {
             sdcard = embedded_sdmmc::SdCard::new(spi_device, delay);
             // Get the card size (this also triggers card initialisation because it's not been done yet)
             info!("Card size is {} bytes", sdcard.num_bytes().unwrap());
+
+            sdcard.spi(|dev| {
+                // Acessamos o SPI bruto do Embassy de dentro do ExclusiveDevice
+                let spi_tmp = dev.bus_mut();
+                
+                // Aplicamos a nova configuração de clock
+                let mut spi_config = spi_tmp.get_current_config();
+                spi_config.frequency = Hertz(25_000_000); 
+                let _ = spi_tmp.set_config(&spi_config);
+            });
+
             let volume_mgr = VolumeManager::new(sdcard, DummyTimeSource);
             spawner.spawn(unwrap!(tasks::sdcard::sd_task(volume_mgr)));
         },
