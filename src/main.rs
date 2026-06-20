@@ -9,6 +9,7 @@ use defmt::*;
 use {defmt_rtt as _, panic_probe as _};
 use embassy_executor::{Spawner, InterruptExecutor};
 use embassy_stm32::{bind_interrupts, interrupt, peripherals};
+use embassy_stm32::interrupt::InterruptExt;
 use embassy_stm32::adc::{Adc, AdcChannel, SampleTime};
 use embassy_stm32::Config;
 use embassy_stm32::exti::{self, ExtiInput};
@@ -148,7 +149,9 @@ async fn main(spawner: Spawner) {
 
     // --- INICIALIZAÇÃO DO EXECUTOR ---
     // O start() vincula o executor ao token da interrupção e limpa o estado inicial
-    let int_spawner = INT_EXECUTOR.start(embassy_stm32::interrupt::EXTI0);
+    let irq = embassy_stm32::interrupt::EXTI0;
+    irq.set_priority(interrupt::Priority::P15);
+    let int_spawner = INT_EXECUTOR.start(irq);
 
     let button = ExtiInput::new(p.PC13, p.EXTI13, Pull::Down, Irqs);
 
