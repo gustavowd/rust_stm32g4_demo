@@ -177,8 +177,13 @@ async fn main(spawner: Spawner) {
 
     let mut config = usart::Config::default();
     config.baudrate = 115_200;
-    let lpusart = Uart::new(p.LPUART1, p.PA3, p.PA2,p.DMA1_CH1, p.DMA1_CH2, Irqs, config).unwrap();
-    int_spawner.spawn(unwrap!(tasks::uart::uart_task(lpusart)));
+    match Uart::new(p.LPUART1, p.PA3, p.PA2,p.DMA1_CH1, p.DMA1_CH2, Irqs, config){
+        Ok(lpusart) => {
+            info!("LPUART1 initialized successfully");
+            int_spawner.spawn(unwrap!(tasks::uart::uart_task(lpusart)));
+        },
+        Err(e) => error!("Failed to initialize LPUART1: {:?}", e)
+    }
 
     let ch1_pin = PwmPin::new(p.PC0, OutputType::PushPull);
     let pwm = SimplePwm::new(p.TIM1, Some(ch1_pin), None, None, None, khz(10), Default::default());
@@ -254,20 +259,27 @@ async fn main(spawner: Spawner) {
             spi_device = device;
             sdcard = embedded_sdmmc::SdCard::new(spi_device, delay);
             // Get the card size (this also triggers card initialisation because it's not been done yet)
-            info!("Card size is {} bytes", sdcard.num_bytes().unwrap());
+            match sdcard.num_bytes() {
+                Ok(size) => {
+                    info!("Card size is {} bytes", size);
 
-            sdcard.spi(|dev| {
-                // Acessamos o SPI bruto do Embassy de dentro do ExclusiveDevice
-                let spi_tmp = dev.bus_mut();
-                
-                // Aplicamos a nova configuração de clock
-                let mut spi_config = spi_tmp.get_current_config();
-                spi_config.frequency = Hertz(25_000_000); 
-                let _ = spi_tmp.set_config(&spi_config);
-            });
+                sdcard.spi(|dev| {
+                    // Acessamos o SPI bruto do Embassy de dentro do ExclusiveDevice
+                    let spi_tmp = dev.bus_mut();
 
-            let volume_mgr = VolumeManager::new(sdcard, DummyTimeSource);
-            spawner.spawn(unwrap!(tasks::sdcard::sd_task(volume_mgr)));
+                    // Aplicamos a nova configuração de clock
+                    let mut spi_config = spi_tmp.get_current_config();
+                    spi_config.frequency = Hertz(25_000_000);
+                    let _ = spi_tmp.set_config(&spi_config);
+                });
+
+                let volume_mgr = VolumeManager::new(sdcard, DummyTimeSource);
+                spawner.spawn(unwrap!(tasks::sdcard::sd_task(volume_mgr)));
+                },
+                Err(_e) => {
+                    error!("Failed to get card size!");
+                }
+            }
         },
         Err(e) => {
             error!("Failed to create SPI device: {:?}", e);
